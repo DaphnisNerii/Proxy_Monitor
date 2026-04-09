@@ -137,9 +137,11 @@ def get_traffic_info():
                     m_up = re.search(r'upload=(\d+)', userinfo)
                     m_dl = re.search(r'download=(\d+)', userinfo)
                     m_total = re.search(r'total=(\d+)', userinfo)
+                    m_expire = re.search(r'expire=(\d+)', userinfo)
                     return int(m_up.group(1)) if m_up else 0, \
                            int(m_dl.group(1)) if m_dl else 0, \
-                           int(m_total.group(1)) if m_total else 0
+                           int(m_total.group(1)) if m_total else 0, \
+                           int(m_expire.group(1)) if m_expire else None
                 else:
                     print(f"[{datetime.datetime.now()}] 失败：未在响应头中找到流量数据。")
                     return None
@@ -169,8 +171,9 @@ def monitor_loop(icon):
         try:
             info = get_traffic_info()
             if info:
-                upload, download, total = info
+                upload, download, total, expire = info
                 current_used = upload + download
+                remaining = max(0, total - current_used)
                 
                 # 状态持久化与计算
                 state = {"date": "", "start_of_day_used": 0, "last_total_used": 0, "daily_warned": False}
@@ -185,7 +188,7 @@ def monitor_loop(icon):
                 
                 # 预警判定
                 if today_used > get_config_val("daily_limit_gb") * 1024**3 and not state["daily_warned"]:
-                    send_serverchan(f"⚠️ 流量超限: {format_bytes(today_used)}", f"已达每日额度。剩余: {format_bytes(total-current_used)}")
+                    send_serverchan(f"⚠️ 流量超限: {format_bytes(today_used)}", f"已达每日额度。剩余: {format_bytes(remaining)}")
                     state["daily_warned"] = True
                 
                 delta = max(0, current_used - state["last_total_used"]) if state["last_total_used"] > 0 else 0
@@ -196,7 +199,18 @@ def monitor_loop(icon):
                 with open(STATE_FILE, "w") as f: json.dump(state, f, indent=4)
                 
                 print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 今日已用: {format_bytes(today_used)} | 速率: {format_bytes(delta)}/min")
-                if icon: icon.title = f"速率: {format_bytes(delta)}/min\n今日已用: {format_bytes(today_used)}"
+                
+                # 更新悬停浮窗内容
+                title_lines = [
+                    f"速率: {format_bytes(delta)}/min",
+                    f"今日已用: {format_bytes(today_used)}",
+                    f"总计剩余: {format_bytes(remaining)}"
+                ]
+                if expire:
+                    expire_date = datetime.datetime.fromtimestamp(expire).strftime("%Y-%m-%d")
+                    title_lines.append(f"到期时间: {expire_date}")
+                
+                if icon: icon.title = "\n".join(title_lines)
         except Exception:
             print(traceback.format_exc())
             
