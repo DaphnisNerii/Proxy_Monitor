@@ -1,0 +1,13 @@
+# 配置文件
+config.json
+
+# 状态与日志
+traffic_state.json
+monitor.log
+
+# 备份文件
+*.bak
+
+# Python 缓存
+__pycache__/
+*.pyc
