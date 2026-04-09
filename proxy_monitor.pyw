@@ -113,8 +113,9 @@ def get_rate_limit_bytes():
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "traffic_state.json")
 
-# 后台运行退出标志
+# 后台运行退出与刷新信号
 keep_running = True
+refresh_event = threading.Event()
 
 def send_serverchan(title, desp=""):
     """使用 Server酱 推送消息"""
@@ -277,12 +278,11 @@ def monitor_loop(icon):
         except Exception as e:
             print(f"[{datetime.datetime.now()}] 运行发生异常:\n{traceback.format_exc()}")
             
-        # 休眠 CHECK_INTERVAL 秒，切片以实现快速退出机制
+        # 等待下一次轮询或刷新信号
         check_interval = get_config_val("check_interval")
-        for _ in range(check_interval):
-            if not keep_running:
-                break
-            time.sleep(1)
+        # wait(timeout) 会在超时或 event.set() 时返回
+        refresh_event.wait(timeout=check_interval)
+        refresh_event.clear()
 
 def create_image():
     # 生成一个简单的运行中图标（圆点）
@@ -350,6 +350,7 @@ def open_settings(icon, item):
                 
                 if save_config(new_config):
                     config = new_config
+                    refresh_event.set()  # 立即唤醒监控线程
                     messagebox.showinfo("成功", "配置已保存并立即生效")
                     root.destroy()
             except ValueError:
@@ -376,6 +377,7 @@ def main():
     icon_image = create_image()
     menu = pystray.Menu(
         pystray.MenuItem("✅ 流量监控运行中", lambda: None, enabled=False),
+        pystray.MenuItem("🔄 立即刷新", lambda: refresh_event.set()),
         pystray.MenuItem("⚙️ 设置", open_settings),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("🚪 退出", on_exit_clicked)
