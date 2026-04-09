@@ -17,8 +17,8 @@
 
 ## 📸 预览展示
 
-> [!TIP]
-> 您可以在此处上传程序运行时的托盘图标截图和设置页面的截图。
+![托盘预览](assets/tray_preview.png)
+![设置界面](assets/settings_preview.png)
 
 ## 🛠️ 安装与运行
 
