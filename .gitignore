@@ -9,4 +9,4 @@ monitor.log
 *.bak
 
 # AI Agent 文件夹
-.agent/
+.agent

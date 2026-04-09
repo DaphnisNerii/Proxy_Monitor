@@ -99,6 +99,8 @@ def get_config_val(key):
 keep_running = True
 refresh_event = threading.Event()
 STATE_FILE = os.path.join(BASE_DIR, "traffic_state.json")
+settings_window_instance = None
+_instance_lock_socket = None # 持有该套接字以保持单实例锁定
 
 def send_serverchan(title, desp=""):
     """使用 Server酱 推送消息"""
@@ -222,73 +224,169 @@ def create_image():
     width, height = 64, 64
     image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    main_color = (99, 102, 241)
+    main_color = (129, 140, 248) # Indigo 400
     draw.ellipse([8, 8, 56, 56], outline=main_color, width=6)
     draw.ellipse([22, 22, 42, 42], fill=main_color)
     return image
 
+def generate_icon(icon_type, color=(255, 255, 255)):
+    """用 PIL 生成简单的矢量感图标"""
+    img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if icon_type == "link":
+        d.rectangle([8, 14, 24, 18], outline=color, width=2)
+        d.rectangle([12, 10, 20, 22], outline=color, width=2)
+    elif icon_type == "key":
+        d.ellipse([8, 8, 18, 18], outline=color, width=2)
+        d.line([18, 13, 26, 13], fill=color, width=2)
+        d.line([22, 13, 22, 17], fill=color, width=2)
+        d.line([25, 13, 25, 17], fill=color, width=2)
+    elif icon_type == "limit":
+        d.polygon([(16, 6), (26, 26), (6, 26)], outline=color, width=2)
+        d.line([16, 14, 16, 20], fill=color, width=2)
+        d.point([16, 22], fill=color)
+    elif icon_type == "clock":
+        d.ellipse([6, 6, 26, 26], outline=color, width=2)
+        d.line([16, 16, 16, 10], fill=color, width=2)
+        d.line([16, 16, 22, 16], fill=color, width=2)
+    elif icon_type == "power":
+        d.arc([8, 8, 24, 24], start=300, end=240, fill=color, width=2)
+        d.line([16, 6, 16, 16], fill=color, width=2)
+    
+    from PIL import ImageTk
+    return ImageTk.PhotoImage(img.resize((20, 20), Image.Resampling.LANCZOS))
+
 def open_settings(icon=None, item=None):
+    global settings_window_instance
+    if settings_window_instance and settings_window_instance.winfo_exists():
+        settings_window_instance.lift()
+        settings_window_instance.focus_force()
+        return
+
     def _create_window():
+        global settings_window_instance
+        from PIL import ImageTk
         root = tk.Tk()
+        settings_window_instance = root
         root.title("Proxy Monitor - 设置")
-        root.configure(bg="#f8fafc")
+        
+        # 调色盘
+        BG_DARK = "#0f172a"
+        CARD_DARK = "#1e293b"
+        TEXT_LIGHT = "#f8fafc"
+        TEXT_MUTED = "#94a3b8"
+        ACCENT = "#818cf8"
+        SUCCESS = "#10b981"
+        INPUT_BG = "#334155"
+
+        root.configure(bg=BG_DARK)
         
         # 居中与淡入
-        w, h = 480, 540
+        w, h = 540, 680
         x, y = (root.winfo_screenwidth()-w)//2, (root.winfo_screenheight()-h)//2
         root.geometry(f"{w}x{h}+{x}+{y}")
         root.attributes("-alpha", 0.0)
         def fade():
-            if root.attributes("-alpha") < 1.0:
+            if root.winfo_exists() and root.attributes("-alpha") < 1.0:
                 root.attributes("-alpha", root.attributes("-alpha")+0.1)
                 root.after(20, fade)
         root.after(50, fade)
 
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure("TLabel", background="#f8fafc", foreground="#1e293b", font=("Segoe UI", 10))
-        style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), foreground="#6366f1", background="#f8fafc")
-        style.configure("Sub.TLabel", font=("Segoe UI", 9), foreground="#64748b", background="#f8fafc")
-        style.configure("Action.TButton", font=("Segoe UI", 10, "bold"), background="#6366f1", foreground="white")
-        style.configure("TLabelframe", background="#f8fafc", foreground="#6366f1")
-        style.configure("TLabelframe.Label", background="#f8fafc", font=("Segoe UI", 9, "bold"))
-
-        main_frame = ttk.Frame(root, padding=30, style="TFrame")
-        style.configure("TFrame", background="#f8fafc")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(main_frame, text="首选项设置", style="Header.TLabel").pack(anchor="w", pady=(0, 20))
         
+        # 全局暗色样式配置
+        style.configure("TFrame", background=BG_DARK)
+        style.configure("Card.TFrame", background=CARD_DARK)
+        style.configure("TLabel", background=CARD_DARK, foreground=TEXT_LIGHT, font=("Segoe UI", 10))
+        style.configure("Header.TLabel", font=("Segoe UI", 18, "bold"), foreground=ACCENT, background=BG_DARK)
+        style.configure("Sub.TLabel", font=("Segoe UI", 9), foreground=TEXT_MUTED, background=CARD_DARK)
+        style.configure("Status.TLabel", font=("Segoe UI", 10, "bold"), foreground=SUCCESS, background=BG_DARK)
+        
+        # 按钮样式
+        style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"), background=ACCENT, foreground="white", borderwidth=0)
+        style.map("Primary.TButton", background=[('active', '#6366f1')])
+        
+        style.configure("TLabelframe", background=CARD_DARK, foreground=ACCENT, bordercolor=INPUT_BG)
+        style.configure("TLabelframe.Label", background=CARD_DARK, foreground=ACCENT, font=("Segoe UI", 10, "bold"))
+
+        # 持有图标对象防止 GC
+        root.icons = {
+            "link": generate_icon("link", (129, 140, 248)),
+            "key": generate_icon("key", (129, 140, 248)),
+            "limit": generate_icon("limit", (244, 63, 94)), # Rose 500
+            "clock": generate_icon("clock", (129, 140, 248)),
+            "power": generate_icon("power", (129, 140, 248))
+        }
+
+        # --- 底部按钮区 (Fixed Footer) ---
+        footer_frame = tk.Frame(root, bg=BG_DARK, pady=20)
+        footer_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        status_tip = ttk.Label(footer_frame, text="", style="Status.TLabel")
+        status_tip.pack(pady=(0, 10))
+        
+        btns_inner = ttk.Frame(footer_frame, style="TFrame")
+        btns_inner.pack(anchor="center")
+        
+        # --- 顶部标题 ---
+        header_frame = tk.Frame(root, bg=BG_DARK, padx=30, pady=25)
+        header_frame.pack(fill=tk.X)
+        ttk.Label(header_frame, text="首选项设置", style="Header.TLabel").pack(side=tk.LEFT)
+
+        # --- 内容区域 (Main Content Area) ---
+        content_card = ttk.Frame(root, style="Card.TFrame", padding=25)
+        content_card.pack(fill=tk.BOTH, expand=True, padx=20)
+
+        # --- 字段生成器 ---
         entries = {}
-        def add_field(label, key, help=""):
-            f = ttk.Frame(main_frame, style="TFrame")
-            f.pack(fill=tk.X, pady=8)
-            ttk.Label(f, text=label).pack(anchor="w")
-            e = ttk.Entry(f, font=("Segoe UI", 10))
-            e.insert(0, str(get_config_val(key))); e.pack(fill=tk.X, pady=(4, 0))
-            if help: ttk.Label(f, text=help, style="Sub.TLabel").pack(anchor="w")
+        def add_field(parent, label, key, icon_key, help=""):
+            f = ttk.Frame(parent, style="Card.TFrame")
+            f.pack(fill=tk.X, pady=12)
+            
+            lbl_f = ttk.Frame(f, style="Card.TFrame")
+            lbl_f.pack(fill=tk.X)
+            tk.Label(lbl_f, image=root.icons[icon_key], bg=CARD_DARK).pack(side=tk.LEFT, padx=(0, 8))
+            ttk.Label(lbl_f, text=label).pack(side=tk.LEFT)
+            
+            e = tk.Entry(f, font=("Segoe UI", 11), bg=INPUT_BG, fg=TEXT_LIGHT, 
+                         insertbackground=TEXT_LIGHT, relief=tk.FLAT, borderwidth=8)
+            e.insert(0, str(get_config_val(key))); e.pack(fill=tk.X, pady=(6, 0))
+            
+            if help: ttk.Label(f, text=help, style="Sub.TLabel").pack(anchor="w", padx=(28, 0))
             entries[key] = e
 
-        add_field("订阅链接 (Subscription URL)", "sub_url")
-        add_field("Server酱 SendKey", "serverchan_sendkey")
+        add_field(content_card, "订阅链接 (Subscription URL)", "sub_url", "link")
+        add_field(content_card, "Server酱 SendKey", "serverchan_sendkey", "key")
         
-        grp = ttk.LabelFrame(main_frame, text=" 预警阈值 ", padding=15)
+        grp = ttk.LabelFrame(content_card, text=" 预警阈值警告 ", padding=15)
         grp.pack(fill=tk.X, pady=20)
-        def add_grp_field(label, key):
-            f = ttk.Frame(grp, style="TFrame")
-            f.pack(fill=tk.X, pady=5)
-            ttk.Label(f, text=label).pack(side=tk.LEFT)
-            e = ttk.Entry(f, width=15); e.insert(0, str(get_config_val(key))); e.pack(side=tk.RIGHT)
-            entries[key] = e
-        add_grp_field("每日限额 (GB)", "daily_limit_gb")
-        add_grp_field("突发速率 (MB/min)", "rate_limit_mb")
-
-        add_field("检查间隔 (秒)", "check_interval", "建议 60s")
         
-        start_var = tk.BooleanVar(value=get_config_val("auto_start"))
-        ttk.Checkbutton(main_frame, text="随 Windows 启动 (开机自启)", variable=start_var).pack(anchor="w", pady=10)
+        def add_grp_field(label, key, icon_key):
+            f = ttk.Frame(grp, style="Card.TFrame")
+            f.pack(fill=tk.X, pady=6)
+            tk.Label(f, image=root.icons[icon_key], bg=CARD_DARK).pack(side=tk.LEFT, padx=(0, 8))
+            ttk.Label(f, text=label).pack(side=tk.LEFT)
+            e = tk.Entry(f, width=15, font=("Segoe UI", 10), bg=INPUT_BG, fg=TEXT_LIGHT, 
+                         insertbackground=TEXT_LIGHT, relief=tk.FLAT, borderwidth=5)
+            e.insert(0, str(get_config_val(key))); e.pack(side=tk.RIGHT)
+            entries[key] = e
+            
+        add_grp_field("每日限额 (GB)", "daily_limit_gb", "limit")
+        add_grp_field("突发速率 (MB/min)", "rate_limit_mb", "limit")
 
-        def save():
+        add_field(content_card, "检查间隔 (秒)", "check_interval", "clock", "建议 60s")
+        
+        # 开机自启
+        p_f = ttk.Frame(content_card, style="Card.TFrame")
+        p_f.pack(fill=tk.X, pady=10)
+        tk.Label(p_f, image=root.icons["power"], bg=CARD_DARK).pack(side=tk.LEFT, padx=(0, 8))
+        start_var = tk.BooleanVar(value=get_config_val("auto_start"))
+        tk.Checkbutton(p_f, text="随 Windows 启动 (开机自启)", variable=start_var, 
+                       bg=CARD_DARK, fg=TEXT_LIGHT, activebackground=CARD_DARK, 
+                       activeforeground=ACCENT, selectcolor=INPUT_BG).pack(side=tk.LEFT)
+
+        def apply_changes(close_after=False):
             try:
                 new = {k: entries[k].get() for k in ["sub_url", "serverchan_sendkey"]}
                 new.update({
@@ -299,20 +397,35 @@ def open_settings(icon=None, item=None):
                 })
                 if save_config(new):
                     global config
-                    config = new; refresh_event.set()
-                    messagebox.showinfo("成功", "设置已生效"); root.destroy()
-            except Exception: messagebox.showerror("错误", "输入非法")
+                    config = new
+                    refresh_event.set()
+                    if close_after:
+                        root.destroy()
+                    else:
+                        status_tip.config(text="✓ 设置已应用并保存")
+                        root.after(2000, lambda: status_tip.config(text="") if root.winfo_exists() else None)
+            except Exception:
+                messagebox.showerror("错误", "输入非法，请检查格式")
 
-        btns = ttk.Frame(main_frame, style="TFrame")
-        btns.pack(fill=tk.X, pady=10)
-        ttk.Button(btns, text=" 取消 ", command=root.destroy).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(btns, text=" 保存 ", style="Action.TButton", command=save).pack(side=tk.RIGHT)
+        ttk.Button(btns_inner, text=" 保存 ", style="Primary.TButton", command=lambda: apply_changes(True)).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btns_inner, text=" 应用 ", style="Primary.TButton", command=lambda: apply_changes(False)).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btns_inner, text=" 取消 ", style="Primary.TButton", command=root.destroy).pack(side=tk.LEFT, padx=10)
         
         root.mainloop()
 
     threading.Thread(target=_create_window, daemon=True).start()
 
 def main():
+    # 单实例检测
+    global _instance_lock_socket
+    try:
+        _instance_lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _instance_lock_socket.bind(('127.0.0.1', 54321))
+    except socket.error:
+        # 已有实例在运行，尝试唤醒它（如果需要）并退出
+        print(f"[{datetime.datetime.now()}] 程序已在运行中，退出新进程。")
+        sys.exit(0)
+
     icon_image = create_image()
     menu = pystray.Menu(
         pystray.MenuItem("📊 Proxy Monitor", lambda: None, enabled=False),
