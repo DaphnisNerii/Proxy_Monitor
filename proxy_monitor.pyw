@@ -18,13 +18,13 @@ import threading
 import subprocess
 import socket
 import urllib.error
+import tkinter as tk
+from tkinter import ttk, messagebox, font
 
 try:
     import pystray
     from PIL import Image, ImageDraw
     import winreg
-    import tkinter as tk
-    from tkinter import ttk, messagebox
 except ImportError as e:
     print(f"[{datetime.datetime.now()}] 缺少依赖模块 {e}，正在尝试自动安装...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pystray", "pillow"])
@@ -285,13 +285,22 @@ def monitor_loop(icon):
         refresh_event.clear()
 
 def create_image():
-    # 生成一个简单的运行中图标（圆点）
-    image = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
-    d = ImageDraw.Draw(image)
-    # 画一个蓝底绿心圆图标
-    d.ellipse((8, 8, 56, 56), fill=(40, 160, 240, 255))
-    d.ellipse((16, 16, 48, 48), fill=(240, 240, 240, 255))
-    d.ellipse((22, 22, 42, 42), fill=(30, 200, 30, 255))
+    """创建一个现代感十足的圆形渐变图标"""
+    width, height = 64, 64
+    image = Image.new('RGBA', (width, height), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(image)
+    
+    # 采用 Indigo 500 (#6366f1) 作为主色调
+    main_color = (99, 102, 241)
+    
+    # 绘制外圆环 (具有抗锯齿感的厚圆环)
+    margin = 8
+    draw.ellipse([margin, margin, width-margin, height-margin], outline=main_color, width=6)
+    
+    # 绘制内部中心圆
+    center_margin = 18
+    draw.ellipse([center_margin, center_margin, width-center_margin, height-center_margin], fill=main_color)
+    
     return image
 
 def open_settings(icon, item):
@@ -375,12 +384,17 @@ def on_exit_clicked(icon, item):
 def main():
     # 初始化托盘图标
     icon_image = create_image()
+    
+    # 更加清晰的菜单结构
     menu = pystray.Menu(
-        pystray.MenuItem("✅ 流量监控运行中", lambda: None, enabled=False),
-        pystray.MenuItem("🔄 立即刷新", lambda: refresh_event.set()),
-        pystray.MenuItem("⚙️ 设置", open_settings),
+        pystray.MenuItem("📊 流量监控器 (运行中)", lambda: None, enabled=False),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("🚪 退出", on_exit_clicked)
+        pystray.MenuItem("🔄 立即刷新数据", lambda: refresh_event.set()),
+        pystray.MenuItem("⚙️ 修改首选项...", open_settings),
+        pystray.MenuItem("🏁 开机自启状态", lambda: None, enabled=False, 
+                         checked=lambda item: get_config_val("auto_start")),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("🚪 安全退出程序", on_exit_clicked)
     )
     icon = pystray.Icon("proxy_traffic_monitor", icon_image, "Proxy Monitor 正在启动...", menu)
     
