@@ -16,6 +16,8 @@ import re
 import traceback
 import threading
 import subprocess
+import socket
+import urllib.error
 
 try:
     import pystray
@@ -132,44 +134,55 @@ def send_serverchan(title, desp=""):
         print(f"[{datetime.datetime.now()}] Server酱推送异常: {e}")
 
 def get_traffic_info():
-    """获取订阅链接中的流量信息"""
+    """获取订阅链接中的流量信息 (带重试和超时优化)"""
     sub_url = get_config_val("sub_url")
     if not sub_url:
         return None
-    req = urllib.request.Request(sub_url, headers={'User-Agent': 'ClashforWindows/0.19.23'})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            headers = response.info()
-            
-            # 使用更通用的方式寻找包含 subscription-userinfo 的键
-            userinfo = None
-            for k, v in headers.items():
-                if 'subscription-userinfo' in k.lower():
-                    userinfo = v
-                    break
+        
+    retries = 2
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(sub_url, headers={'User-Agent': 'ClashforWindows/0.19.23'})
+            # 增加超时到 30 秒
+            with urllib.request.urlopen(req, timeout=30) as response:
+                headers = response.info()
+                
+                # 使用更通用的方式寻找包含 subscription-userinfo 的键
+                userinfo = None
+                for k, v in headers.items():
+                    if 'subscription-userinfo' in k.lower():
+                        userinfo = v
+                        break
+                        
+                if userinfo:
+                    upload = 0
+                    download = 0
+                    total = 0
+                    m_up = re.search(r'upload=(\d+)', userinfo)
+                    if m_up: upload = int(m_up.group(1))
+                    m_dl = re.search(r'download=(\d+)', userinfo)
+                    if m_dl: download = int(m_dl.group(1))
+                    m_total = re.search(r'total=(\d+)', userinfo)
+                    if m_total: total = int(m_total.group(1))
+                    return upload, download, total
+                else:
+                    print(f"[{datetime.datetime.now()}] 失败：未在响应头中找到流量信息字段。")
+                    return None
                     
-            if userinfo:
-                # 解析格式通常如: upload=2895696; download=3324683; total=322122547; expire=1738221659
-                upload = 0
-                download = 0
-                total = 0
-                
-                m_up = re.search(r'upload=(\d+)', userinfo)
-                if m_up: upload = int(m_up.group(1))
-                
-                m_dl = re.search(r'download=(\d+)', userinfo)
-                if m_dl: download = int(m_dl.group(1))
-                
-                m_total = re.search(r'total=(\d+)', userinfo)
-                if m_total: total = int(m_total.group(1))
-                
-                return upload, download, total
-            else:
-                print(f"[{datetime.datetime.now()}] 失败：未在响应头中找到 subscription-userinfo 标头。请确认您的订阅链接支持提取流量信息。")
-                return None
-    except Exception as e:
-        print(f"[{datetime.datetime.now()}] 请求订阅信息异常: {e}")
-        return None
+        except socket.timeout:
+            error_msg = "连接超时 (30s)"
+        except urllib.error.URLError as e:
+            error_msg = f"网络错误: {e.reason}"
+        except Exception as e:
+            error_msg = f"未知异常: {e}"
+            
+        if attempt < retries - 1:
+            print(f"[{datetime.datetime.now()}] 获取订阅信息失败 ({error_msg})，5秒后进行第 {attempt + 2} 次尝试...")
+            time.sleep(5)
+        else:
+            print(f"[{datetime.datetime.now()}] 请求订阅信息异常: {error_msg}")
+            
+    return None
 
 def load_state():
     if os.path.exists(STATE_FILE):

@@ -8,6 +8,5 @@ monitor.log
 # 备份文件
 *.bak
 
-# Python 缓存
-__pycache__/
-*.pyc
+# AI Agent 文件夹
+.agent/
