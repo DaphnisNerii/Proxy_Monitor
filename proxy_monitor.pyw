@@ -31,8 +31,6 @@ except ImportError as e:
     import pystray
     from PIL import Image, ImageDraw
     import winreg
-    import tkinter as tk
-    from tkinter import ttk, messagebox
 
 # ================= 配置区 =================
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
@@ -75,7 +73,6 @@ def handle_auto_start(enable):
     """设置或取消 Windows 开机自启"""
     key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
     app_name = "ProxyTrafficMonitor"
-    # 使用 pythonw.exe 运行脚本
     cmd = f'"{sys.executable}" "{os.path.abspath(__file__)}"'
     
     try:
@@ -94,28 +91,14 @@ def handle_auto_start(enable):
 # 初始化配置
 config = load_config()
 
-# 全局变量同步 (将在循环中直接读取 config 字典以支持动态更新)
 def get_config_val(key):
     global config
     return config.get(key, DEFAULT_CONFIG.get(key))
 
-# ================= ================= =================
-# ================= 以下内容通常无需修改 =================
-# ================= ================= =================
-# 基础计算 (由函数动态派生)
-def get_daily_limit_bytes():
-    return get_config_val("daily_limit_gb") * 1024 * 1024 * 1024
-
-def get_rate_limit_bytes():
-    return get_config_val("rate_limit_mb") * 1024 * 1024
-
-# 获取当前脚本所在目录，确保状态文件与脚本在同一目录下
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATE_FILE = os.path.join(BASE_DIR, "traffic_state.json")
-
 # 后台运行退出与刷新信号
 keep_running = True
 refresh_event = threading.Event()
+STATE_FILE = os.path.join(BASE_DIR, "traffic_state.json")
 
 def send_serverchan(title, desp=""):
     """使用 Server酱 推送消息"""
@@ -129,7 +112,6 @@ def send_serverchan(title, desp=""):
     req = urllib.request.Request(url, data=data)
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
-            res = response.read().decode('utf-8')
             print(f"[{datetime.datetime.now()}] Server酱推送成功: {title}")
     except Exception as e:
         print(f"[{datetime.datetime.now()}] Server酱推送异常: {e}")
@@ -144,32 +126,23 @@ def get_traffic_info():
     for attempt in range(retries):
         try:
             req = urllib.request.Request(sub_url, headers={'User-Agent': 'ClashforWindows/0.19.23'})
-            # 增加超时到 30 秒
             with urllib.request.urlopen(req, timeout=30) as response:
                 headers = response.info()
-                
-                # 使用更通用的方式寻找包含 subscription-userinfo 的键
                 userinfo = None
                 for k, v in headers.items():
                     if 'subscription-userinfo' in k.lower():
                         userinfo = v
                         break
-                        
                 if userinfo:
-                    upload = 0
-                    download = 0
-                    total = 0
                     m_up = re.search(r'upload=(\d+)', userinfo)
-                    if m_up: upload = int(m_up.group(1))
                     m_dl = re.search(r'download=(\d+)', userinfo)
-                    if m_dl: download = int(m_dl.group(1))
                     m_total = re.search(r'total=(\d+)', userinfo)
-                    if m_total: total = int(m_total.group(1))
-                    return upload, download, total
+                    return int(m_up.group(1)) if m_up else 0, \
+                           int(m_dl.group(1)) if m_dl else 0, \
+                           int(m_total.group(1)) if m_total else 0
                 else:
-                    print(f"[{datetime.datetime.now()}] 失败：未在响应头中找到流量信息字段。")
+                    print(f"[{datetime.datetime.now()}] 失败：未在响应头中找到流量数据。")
                     return None
-                    
         except socket.timeout:
             error_msg = "连接超时 (30s)"
         except urllib.error.URLError as e:
@@ -178,34 +151,10 @@ def get_traffic_info():
             error_msg = f"未知异常: {e}"
             
         if attempt < retries - 1:
-            print(f"[{datetime.datetime.now()}] 获取订阅信息失败 ({error_msg})，5秒后进行第 {attempt + 2} 次尝试...")
             time.sleep(5)
         else:
             print(f"[{datetime.datetime.now()}] 请求订阅信息异常: {error_msg}")
-            
     return None
-
-def load_state():
-    if os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[{datetime.datetime.now()}] 读取状态文件失败: {e}")
-            
-    return {
-        "date": "",                 # 记录日期的字符串 YYYY-MM-DD
-        "start_of_day_used": 0,     # 当日零点时的历史总流量(upload+download)
-        "last_total_used": 0,       # 上一分钟计算的旧总流量
-        "daily_warned": False       # 今日是否触发过每日警告
-    }
-
-def save_state(state):
-    try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f, indent=4)
-    except Exception as e:
-        print(f"[{datetime.datetime.now()}] 保存状态文件失败: {e}")
 
 def format_bytes(b):
     if b < 1024: return f"{b} B"
@@ -215,9 +164,7 @@ def format_bytes(b):
 
 def monitor_loop(icon):
     global keep_running
-
     print("代理流量监控已启动！开始后台轮询...")
-    
     while keep_running:
         try:
             info = get_traffic_info()
@@ -225,184 +172,144 @@ def monitor_loop(icon):
                 upload, download, total = info
                 current_used = upload + download
                 
-                state = load_state()
+                # 状态持久化与计算
+                state = {"date": "", "start_of_day_used": 0, "last_total_used": 0, "daily_warned": False}
+                if os.path.exists(STATE_FILE):
+                    with open(STATE_FILE, "r") as f: state.update(json.load(f))
+                
                 current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                
-                # 1. 跨越新的一天重置标志位和基准线
                 if state["date"] != current_date:
-                    print(f"\n--- [{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 新的一天开始记录，重置统计。 ---")
-                    state["date"] = current_date
-                    state["start_of_day_used"] = current_used
-                    state["daily_warned"] = False
-                    
-                # 计算今天已经用掉的流量
-                today_used = current_used - state["start_of_day_used"]
-                # 处理如果厂商在年中强行清空了你的总流量使用记录的情况
-                if today_used < 0:
-                    today_used = 0
-                    state["start_of_day_used"] = current_used
-                    
-                # 2. 每日阈值警告 (每天只会提醒一次)
-                daily_limit_bytes = get_daily_limit_bytes()
-                if today_used > daily_limit_bytes and not state["daily_warned"]:
-                    msg_title = f"⚠️ 每日流量超限警告: 已使用 {format_bytes(today_used)}"
-                    msg_desc = f"您设定的每日警告阈值为 **{get_config_val('daily_limit_gb')} GB**。\n\n今日已使用量达到 **{format_bytes(today_used)}**！\n请注意控制使用量。\n\n**总剩余流量:** {format_bytes(total - current_used)}"
-                    send_serverchan(msg_title, msg_desc)
+                    state.update({"date": current_date, "start_of_day_used": current_used, "daily_warned": False})
+                
+                today_used = max(0, current_used - state["start_of_day_used"])
+                
+                # 预警判定
+                if today_used > get_config_val("daily_limit_gb") * 1024**3 and not state["daily_warned"]:
+                    send_serverchan(f"⚠️ 流量超限: {format_bytes(today_used)}", f"已达每日额度。剩余: {format_bytes(total-current_used)}")
                     state["daily_warned"] = True
-
-                # 3. 流量高速消耗警告判定 
-                # (需要有上一分钟记录数据才对比)
-                delta = 0
-                rate_limit_bytes = get_rate_limit_bytes()
-                if state["last_total_used"] > 0:
-                    delta = current_used - state["last_total_used"]
-                    # 避免清零或其他异常情况导致的负数
-                    if delta > rate_limit_bytes:
-                        msg_title = f"🚨 流量消耗过快警告: {format_bytes(delta)} / 分钟"
-                        msg_desc = f"您在过去一分钟内的流量消耗了 **{format_bytes(delta)}**。\n\n设定的警告阈值为 **{get_config_val('rate_limit_mb')} MB/分钟**。\n\n可能是后台正在下载大文件，或者代理网络遭到了异常消耗，请尽快检查！"
-                        send_serverchan(msg_title, msg_desc)
-                        
-                # 记录本分钟为"上一分钟"以便下次循环使用
+                
+                delta = max(0, current_used - state["last_total_used"]) if state["last_total_used"] > 0 else 0
+                if delta > get_config_val("rate_limit_mb") * 1024**2:
+                    send_serverchan(f"🚨 速率过快: {format_bytes(delta)}/min")
+                
                 state["last_total_used"] = current_used
-                save_state(state)
+                with open(STATE_FILE, "w") as f: json.dump(state, f, indent=4)
                 
-                print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 检查完成 -> 今日已用: {format_bytes(today_used).ljust(10)} | 当前速率: {format_bytes(delta)} / min | 剩余: {format_bytes(total - current_used)}")
-                
-                # 更新任务栏图标的状态提示文本
-                if icon:
-                    today_str = format_bytes(today_used)
-                    left_str = format_bytes(total - current_used)
-                    delta_str = format_bytes(delta)
-                    icon.title = f"速率: {delta_str}/min\n今日已用: {today_str}\n剩余流量: {left_str}"
-                
-        except Exception as e:
-            print(f"[{datetime.datetime.now()}] 运行发生异常:\n{traceback.format_exc()}")
+                print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 今日已用: {format_bytes(today_used)} | 速率: {format_bytes(delta)}/min")
+                if icon: icon.title = f"速率: {format_bytes(delta)}/min\n今日已用: {format_bytes(today_used)}"
+        except Exception:
+            print(traceback.format_exc())
             
-        # 等待下一次轮询或刷新信号
-        check_interval = get_config_val("check_interval")
-        # wait(timeout) 会在超时或 event.set() 时返回
-        refresh_event.wait(timeout=check_interval)
+        refresh_event.wait(timeout=get_config_val("check_interval"))
         refresh_event.clear()
 
 def create_image():
-    """创建一个现代感十足的圆形渐变图标"""
+    """现代 Indigo 500 圆环图标"""
     width, height = 64, 64
-    image = Image.new('RGBA', (width, height), (255, 255, 255, 0))
+    image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    
-    # 采用 Indigo 500 (#6366f1) 作为主色调
     main_color = (99, 102, 241)
-    
-    # 绘制外圆环 (具有抗锯齿感的厚圆环)
-    margin = 8
-    draw.ellipse([margin, margin, width-margin, height-margin], outline=main_color, width=6)
-    
-    # 绘制内部中心圆
-    center_margin = 18
-    draw.ellipse([center_margin, center_margin, width-center_margin, height-center_margin], fill=main_color)
-    
+    draw.ellipse([8, 8, 56, 56], outline=main_color, width=6)
+    draw.ellipse([22, 22, 42, 42], fill=main_color)
     return image
 
-def open_settings(icon, item):
-    """在独立线程中打开设置窗口"""
+def open_settings(icon=None, item=None):
     def _create_window():
         root = tk.Tk()
         root.title("Proxy Monitor - 设置")
-        root.geometry("450x420")
-        # 居中显示
-        sw = root.winfo_screenwidth()
-        sh = root.winfo_screenheight()
-        x = (sw - 450) / 2
-        y = (sh - 420) / 2
-        root.geometry("+%d+%d" % (x, y))
+        root.configure(bg="#f8fafc")
         
-        # 样式设置
+        # 居中与淡入
+        w, h = 480, 540
+        x, y = (root.winfo_screenwidth()-w)//2, (root.winfo_screenheight()-h)//2
+        root.geometry(f"{w}x{h}+{x}+{y}")
+        root.attributes("-alpha", 0.0)
+        def fade():
+            if root.attributes("-alpha") < 1.0:
+                root.attributes("-alpha", root.attributes("-alpha")+0.1)
+                root.after(20, fade)
+        root.after(50, fade)
+
         style = ttk.Style()
-        style.configure("TLabel", font=("Microsoft YaHei", 9))
-        style.configure("TButton", font=("Microsoft YaHei", 9))
-        
-        main_frame = ttk.Frame(root, padding="20")
+        style.theme_use('clam')
+        style.configure("TLabel", background="#f8fafc", foreground="#1e293b", font=("Segoe UI", 10))
+        style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), foreground="#6366f1", background="#f8fafc")
+        style.configure("Sub.TLabel", font=("Segoe UI", 9), foreground="#64748b", background="#f8fafc")
+        style.configure("Action.TButton", font=("Segoe UI", 10, "bold"), background="#6366f1", foreground="white")
+        style.configure("TLabelframe", background="#f8fafc", foreground="#6366f1")
+        style.configure("TLabelframe.Label", background="#f8fafc", font=("Segoe UI", 9, "bold"))
+
+        main_frame = ttk.Frame(root, padding=30, style="TFrame")
+        style.configure("TFrame", background="#f8fafc")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # 辅助函数：创建输入行
-        def create_entry(parent, label_text, key, row):
-            ttk.Label(parent, text=label_text).grid(row=row, column=0, sticky=tk.W, pady=5)
-            entry = ttk.Entry(parent, width=40)
-            entry.grid(row=row, column=1, sticky=tk.EW, pady=5)
-            val = get_config_val(key)
-            entry.insert(0, str(val))
-            return entry
-
-        entry_sub = create_entry(main_frame, "订阅链接:", "sub_url", 0)
-        entry_key = create_entry(main_frame, "Server酱 Key:", "serverchan_sendkey", 1)
-        entry_daily = create_entry(main_frame, "每日限额(GB):", "daily_limit_gb", 2)
-        entry_rate = create_entry(main_frame, "速率阈值(MB/m):", "rate_limit_mb", 3)
-        entry_interval = create_entry(main_frame, "检查间隔(s):", "check_interval", 4)
+        ttk.Label(main_frame, text="首选项设置", style="Header.TLabel").pack(anchor="w", pady=(0, 20))
         
-        var_autostart = tk.BooleanVar(value=get_config_val("auto_start"))
-        ttk.Checkbutton(main_frame, text="开机自启动", variable=var_autostart).grid(row=5, column=1, sticky=tk.W, pady=10)
+        entries = {}
+        def add_field(label, key, help=""):
+            f = ttk.Frame(main_frame, style="TFrame")
+            f.pack(fill=tk.X, pady=8)
+            ttk.Label(f, text=label).pack(anchor="w")
+            e = ttk.Entry(f, font=("Segoe UI", 10))
+            e.insert(0, str(get_config_val(key))); e.pack(fill=tk.X, pady=(4, 0))
+            if help: ttk.Label(f, text=help, style="Sub.TLabel").pack(anchor="w")
+            entries[key] = e
 
-        def on_save():
-            global config
+        add_field("订阅链接 (Subscription URL)", "sub_url")
+        add_field("Server酱 SendKey", "serverchan_sendkey")
+        
+        grp = ttk.LabelFrame(main_frame, text=" 预警阈值 ", padding=15)
+        grp.pack(fill=tk.X, pady=20)
+        def add_grp_field(label, key):
+            f = ttk.Frame(grp, style="TFrame")
+            f.pack(fill=tk.X, pady=5)
+            ttk.Label(f, text=label).pack(side=tk.LEFT)
+            e = ttk.Entry(f, width=15); e.insert(0, str(get_config_val(key))); e.pack(side=tk.RIGHT)
+            entries[key] = e
+        add_grp_field("每日限额 (GB)", "daily_limit_gb")
+        add_grp_field("突发速率 (MB/min)", "rate_limit_mb")
+
+        add_field("检查间隔 (秒)", "check_interval", "建议 60s")
+        
+        start_var = tk.BooleanVar(value=get_config_val("auto_start"))
+        ttk.Checkbutton(main_frame, text="随 Windows 启动 (开机自启)", variable=start_var).pack(anchor="w", pady=10)
+
+        def save():
             try:
-                new_config = {
-                    "sub_url": entry_sub.get().strip(),
-                    "serverchan_sendkey": entry_key.get().strip(),
-                    "daily_limit_gb": float(entry_daily.get()),
-                    "rate_limit_mb": float(entry_rate.get()),
-                    "check_interval": int(entry_interval.get()),
-                    "auto_start": var_autostart.get()
-                }
-                if new_config["check_interval"] < 5:
-                    messagebox.showwarning("警告", "检查间隔不能小于 5 秒")
-                    return
-                
-                if save_config(new_config):
-                    config = new_config
-                    refresh_event.set()  # 立即唤醒监控线程
-                    messagebox.showinfo("成功", "配置已保存并立即生效")
-                    root.destroy()
-            except ValueError:
-                messagebox.showerror("错误", "请在数字项中输入有效的数值")
+                new = {k: entries[k].get() for k in ["sub_url", "serverchan_sendkey"]}
+                new.update({
+                    "daily_limit_gb": float(entries["daily_limit_gb"].get()),
+                    "rate_limit_mb": float(entries["rate_limit_mb"].get()),
+                    "check_interval": int(entries["check_interval"].get()),
+                    "auto_start": start_var.get()
+                })
+                if save_config(new):
+                    global config
+                    config = new; refresh_event.set()
+                    messagebox.showinfo("成功", "设置已生效"); root.destroy()
+            except Exception: messagebox.showerror("错误", "输入非法")
 
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.grid(row=6, column=0, columnspan=2, pady=20)
+        btns = ttk.Frame(main_frame, style="TFrame")
+        btns.pack(fill=tk.X, pady=10)
+        ttk.Button(btns, text=" 取消 ", command=root.destroy).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btns, text=" 保存 ", style="Action.TButton", command=save).pack(side=tk.RIGHT)
         
-        ttk.Button(btn_frame, text="保存", command=on_save).pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="取消", command=root.destroy).pack(side=tk.LEFT, padx=10)
-
         root.mainloop()
 
-    # 在新线程里运行，防止阻塞托盘
     threading.Thread(target=_create_window, daemon=True).start()
 
-def on_exit_clicked(icon, item):
-    global keep_running
-    keep_running = False
-    icon.stop()
-
 def main():
-    # 初始化托盘图标
     icon_image = create_image()
-    
-    # 更加清晰的菜单结构
     menu = pystray.Menu(
-        pystray.MenuItem("📊 流量监控器 (运行中)", lambda: None, enabled=False),
+        pystray.MenuItem("📊 Proxy Monitor", lambda: None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("🔄 立即刷新数据", lambda: refresh_event.set()),
         pystray.MenuItem("⚙️ 修改首选项...", open_settings),
-        pystray.MenuItem("🏁 开机自启状态", lambda: None, enabled=False, 
-                         checked=lambda item: get_config_val("auto_start")),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("🚪 安全退出程序", on_exit_clicked)
+        pystray.MenuItem("🚪 安全退出程序", lambda icon, item: [setattr(sys.modules[__name__], 'keep_running', False), icon.stop()])
     )
-    icon = pystray.Icon("proxy_traffic_monitor", icon_image, "Proxy Monitor 正在启动...", menu)
-    
-    # 启动后台工作线程
-    worker_thread = threading.Thread(target=monitor_loop, args=(icon,), daemon=True)
-    worker_thread.start()
-    
-    # 阻塞主线程以显示系统托盘图标
+    icon = pystray.Icon("proxy_monitor", icon_image, "Proxy Monitor 运行中", menu)
+    threading.Thread(target=monitor_loop, args=(icon,), daemon=True).start()
     icon.run()
 
 if __name__ == "__main__":
