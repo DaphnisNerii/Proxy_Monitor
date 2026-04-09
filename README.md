@@ -26,17 +26,32 @@
 - Windows 10/11
 - Python 3.7+
 
-### 2. 安装依赖
-程序会在首次启动时自动尝试安装必要的依赖，您也可以手动执行：
+### 2. 获取程序
+
+您可以选择以下两种方式之一：
+
+#### A. 开发者方式 (通过 Git 克隆)
+```bash
+git clone https://github.com/DaphnisNerii/Proxy_Monitor.git
+cd Proxy_Monitor
+```
+
+#### B. 普通用户方式 (下载压缩包)
+前往 [Releases](https://github.com/DaphnisNerii/Proxy_Monitor/releases) 页面，下载最新的 `Source code (zip)` 文件并解压到本地文件夹。
+
+### 3. 安装依赖
+程序会在首次启动时自动尝试安装必要的依赖。若自动安装失败，请在项目根目录手动执行：
 ```bash
 pip install pystray pillow
 ```
 
-### 3. 启动程序
-由于是后台工具，推荐直接双击运行：
-```bash
-pythonw proxy_monitor.pyw
-```
+### 4. 启动程序
+由于本程序是后台托盘工具，推荐使用 `pythonw` 运行以隐藏控制台窗口：
+- 直接双击 `proxy_monitor.pyw`
+- 或在命令行执行：
+  ```bash
+  pythonw proxy_monitor.pyw
+  ```
 
 ## ⚙️ 配置说明
 
