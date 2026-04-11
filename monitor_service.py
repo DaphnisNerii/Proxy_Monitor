@@ -41,11 +41,12 @@ class TrafficMonitor:
         if not sub_url:
             return None
             
-        retries = 2
+        retries = 3
+        backoff_sec = 2
         for attempt in range(retries):
             try:
                 req = urllib.request.Request(sub_url, headers={'User-Agent': 'ClashforWindows/0.19.23'})
-                with urllib.request.urlopen(req, timeout=30) as response:
+                with urllib.request.urlopen(req, timeout=10) as response:
                     headers = response.info()
                     userinfo = None
                     for k, v in headers.items():
@@ -61,11 +62,12 @@ class TrafficMonitor:
                                int(m_dl.group(1)) if m_dl else 0, \
                                int(m_total.group(1)) if m_total else 0, \
                                int(m_expire.group(1)) if m_expire else None
-            except (socket.timeout, urllib.error.URLError, Exception):
+            except (socket.timeout, urllib.error.URLError, Exception) as e:
                 if attempt == retries - 1:
-                    print(f"[{datetime.datetime.now()}] 请求订阅信息异常")
+                    print(f"[{datetime.datetime.now()}] 请求订阅信息异常: {e}")
             if attempt < retries - 1:
-                time.sleep(5)
+                time.sleep(backoff_sec)
+                backoff_sec *= 2
         return None
 
     def run_loop(self, icon_callback=None):
