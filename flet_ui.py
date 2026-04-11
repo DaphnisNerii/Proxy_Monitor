@@ -1,5 +1,6 @@
 import flet as ft
 import threading
+import datetime
 
 class FletUI:
     def __init__(self, bridge):
@@ -13,6 +14,31 @@ class FletUI:
         self.status_remaining = ft.Text("0 B", size=18, color=ft.Colors.SECONDARY)
         self.status_expire = ft.Text("N/A", size=14, color=ft.Colors.OUTLINE)
         self.status_last_update = ft.Text("从未更新", size=12, italic=True)
+
+        # 历史趋势组件
+        self.chart_series = ft.LineChartData(
+            color=ft.Colors.ACCENT,
+            stroke_width=3,
+            curved=True,
+            below_line_bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ACCENT),
+            below_line_gradient=ft.LinearGradient(
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center,
+                colors=[ft.Colors.ACCENT, ft.Colors.TRANSPARENT],
+            ),
+            points=[]
+        )
+        self.chart = ft.LineChart(
+            data_series=[self.chart_series],
+            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)),
+            horizontal_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE)),
+            vertical_grid_lines=ft.ChartGridLines(interval=3600, color=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE)),
+            left_axis=ft.ChartAxis(labels_size=40),
+            bottom_axis=ft.ChartAxis(labels_size=32),
+            expand=True,
+            interactive=True,
+        )
+        self.summary_row = ft.Row(wrap=True, spacing=10, run_spacing=10)
 
     def main(self, page: ft.Page):
         self.page = page
@@ -58,9 +84,63 @@ class FletUI:
         
         if self.page:
             try:
+                self._update_charts()
                 self.page.update()
             except:
                 pass
+
+    def _update_charts(self):
+        """刷新图表数据"""
+        # 1. 更新 24h 速率图
+        history = self.bridge.get_recent_history(24)
+        if history:
+            now = datetime.datetime.now()
+            points = []
+            for ts_str, delta in history:
+                ts = datetime.datetime.fromisoformat(ts_str)
+                # X 轴为相对于“当前时间 - 24小时”的秒数
+                x = (ts - (now - datetime.timedelta(hours=24))).total_seconds()
+                # Y 轴为 MB/min
+                y = delta / (1024 * 1024)
+                points.append(ft.LineChartDataPoint(x, y))
+            
+            self.chart_series.points = points
+            
+            # 3. 设置坐标轴与标签 (每4小时一个刻度)
+            self.chart.min_x = 0
+            self.chart.max_x = 86400
+            self.chart.max_y = max(p.y for p in points) * 1.2 or 1
+            
+            labels = []
+            for i in range(0, 25, 4): # 从 -24h 到 0h，每 4 小时
+                ts = now - datetime.timedelta(hours=24-i)
+                labels.append(
+                    ft.ChartAxisLabel(
+                        value=i * 3600,
+                        label=ft.Text(ts.strftime("%H:%M"), size=10, color=ft.Colors.OUTLINE)
+                    )
+                )
+            self.chart.bottom_axis.labels = labels
+        
+        # 2. 更新 7d 汇总卡片
+        summaries = self.bridge.get_stats_summary(7)
+        if summaries:
+            cards = []
+            for date_str, total in summaries:
+                gb = total / (1024 * 1024 * 1024)
+                cards.append(
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text(date_str[5:], size=12, weight=ft.FontWeight.W_500), # 只显示 MM-DD
+                            ft.Text(f"{gb:.2f} GB", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.ACCENT),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
+                        padding=10,
+                        border_radius=8,
+                        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                        width=80,
+                    )
+                )
+            self.summary_row.controls = cards
 
     def _build_layout(self):
         self.rail = ft.NavigationRail(
@@ -137,15 +217,21 @@ class FletUI:
                 bgcolor=ft.Colors.SURFACE_VARIANT,
             ),
             ft.Container(height=20),
-            ft.Text("历史趋势 (即将推出)", size=16, italic=True, color=ft.Colors.OUTLINE),
+            ft.Text("24小时流量速率 (MB/min)", size=18, weight=ft.FontWeight.W_500),
             ft.Container(
-                height=150,
-                bgcolor=ft.Colors.BLACK12,
+                content=self.chart,
+                height=250,
+                padding=10,
                 border_radius=10,
-                alignment=ft.alignment.center,
-                content=ft.Icon(ft.Icons.TIMELINE, size=50, color=ft.Colors.OUTLINE_VARIANT)
-            )
+                bgcolor=ft.Colors.BLACK12,
+            ),
+            ft.Container(height=20),
+            ft.Text("最近 7 天统计", size=18, weight=ft.FontWeight.W_500),
+            self.summary_row,
+            ft.Container(height=20),
         ]
+        # 初次加载数据
+        self._update_charts()
 
     def _show_settings(self):
         # 从 Bridge 获取当前的配置

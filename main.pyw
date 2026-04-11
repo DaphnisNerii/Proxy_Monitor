@@ -43,7 +43,7 @@ def main():
     monitor.refresh_event = threading.Event()
     
     # 5. 初始化桥接器
-    bridge = UIBridge(monitor, config_mgr)
+    bridge = UIBridge(monitor, config_mgr, ds)
     
     # 6. 初始化 Flet UI 对象 (尚未启动)
     ui_app = FletUI(bridge)

@@ -5,7 +5,7 @@ v1.1 里程碑专注于提升 Proxy Monitor 的用户体验。我们将弃用传
 
 ## Milestones
 - ✅ **v1.0 Robustness MVP** — Phases 1-3 (Shipped: 2026-04-11)
-- 📋 **v1.1 UX & Analytics** — (Next Up)
+- ✅ **v1.1 UX & Analytics** — (Shipped: 2026-04-11)
 
 ## Phases
 
@@ -18,17 +18,28 @@ v1.1 里程碑专注于提升 Proxy Monitor 的用户体验。我们将弃用传
 
 </details>
 
-### 📋 v1.1 UX & Analytics (Planned)
+<details open>
+<summary>✅ v1.1 UX & Analytics (Phases 4-6) — SHIPPED 2026-04-11</summary>
 
-- [ ] **Phase 4: UI 框架迁移与系统桥接** (UI-MOD-01, ARCH-EXP-04/05)
-  - 目标: 引入 Flet，实现 UI 与核心监控逻辑的解耦及托盘通信。
-  - 指标: Flet 窗口与托盘共存，基本设置可读取。
-- [ ] **Phase 5: 数据持久化与历史统计** (STAT-02, STAT-03)
-  - 目标: 引入 SQLite，实现流量数据的历史采集与日/月报统计。
-  - 指标: 数据库持久化正常，日志记录无损。
-- [ ] **Phase 6: 数据看板与交互打磨** (STAT-01, UI-02, UI-03)
-  - 目标: 实现实时流量折线图及侧边栏布局，美化设置反馈。
-  - 指标: UI 流畅度提升，数据看板直观。
+- [x] **Phase 4: UI 框架迁移与系统桥接** — Completed 2026-04-11
+- [x] **Phase 5: 数据持久化与历史统计** — Completed 2026-04-11
+- [x] **Phase 6: 数据看板与交互打磨** — Completed 2026-04-11
+
+</details>
+
+### Phase 4: UI 框架迁移与系统桥接
+- **Goal**: 引入 Flet，实现 UI 与核心监控逻辑的解耦及托盘通信。
+- **Requirements**: UI-MOD-01, ARCH-EXP-04, ARCH-EXP-05
+- **Downstream**: Phase 5, Phase 6
+
+### Phase 5: 数据持久化与历史统计
+- **Goal**: 引入 SQLite，实现流量数据的历史采集与日/月报统计。
+- **Requirements**: STAT-02, STAT-03
+- **Downstream**: Phase 6
+
+### Phase 6: 数据看板与交互打磨
+- **Goal**: 实现实时流量折线图及侧边栏布局，美化设置反馈。
+- **Requirements**: STAT-01, UI-02, UI-03
 
 ## Progress
 
@@ -37,9 +48,9 @@ v1.1 里程碑专注于提升 Proxy Monitor 的用户体验。我们将弃用传
 | 1. 架构重构与基础自检 | v1.0 | 2/2 | Complete | 2026-04-11 |
 | 2. 自动化测试与逻辑加固 | v1.0 | 2/2 | Complete | 2026-04-11 |
 | 3. 用户反馈与异常处理增强 | v1.0 | 2/2 | Complete | 2026-04-11 |
-| 4. UI 框架迁移与重构 | v1.1 | 0/1 | Not started | - |
-| 5. 数据持久化与历史统计 | v1.1 | 0/1 | Not started | - |
-| 6. 数据看板与交互打磨 | v1.1 | 0/1 | Not started | - |
+| 4. UI 框架迁移与系统桥接 | v1.1 | 1/1 | Complete | 2026-04-11 |
+| 5. 数据持久化与历史统计 | v1.1 | 1/1 | Complete | 2026-04-11 |
+| 6. 数据看板与交互打磨 | v1.1 | 1/1 | Complete | 2026-04-11 |
 
 ---
 *Roadmap updated at milestones/v1.1-START.md*

@@ -106,6 +106,24 @@ class DataService:
             d = conn.execute("DELETE FROM daily_stats WHERE date < ?", (cutoff_date,))
             print(f"[{datetime.datetime.now()}] 数据清理完成: 移除 {h.rowcount} 条明细, {d.rowcount} 条汇总")
 
+    def get_recent_history(self, hours=24):
+        conn = self._get_conn()
+        cutoff = (datetime.datetime.now() - datetime.timedelta(hours=hours)).isoformat()
+        cursor = conn.execute(
+            "SELECT timestamp, delta_bytes FROM traffic_history WHERE timestamp > ? ORDER BY timestamp ASC",
+            (cutoff,)
+        )
+        return cursor.fetchall()
+
+    def get_stats_summary(self, days=7):
+        conn = self._get_conn()
+        cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+        cursor = conn.execute(
+            "SELECT date, total_used FROM daily_stats WHERE date > ? ORDER BY date ASC",
+            (cutoff_date,)
+        )
+        return cursor.fetchall()
+
     def migrate_from_json(self, json_path):
         if not os.path.exists(json_path):
             return False

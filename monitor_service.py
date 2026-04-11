@@ -86,8 +86,10 @@ class TrafficMonitor:
                     # 改为直接存储 current_used 到历史，计算由 DataService 或 数据库聚合完成更佳
                     # 但为了最小化逻辑变动，我们在内存维护或从 DB 获取今日最旧一条
                     
-                    # 实现 30 天清理
-                    ds.prune_old_data(30)
+                    # 实现 30 天清理 (仅在跨天或启动时运行一次)
+                    if not hasattr(self, 'last_prune_date') or self.last_prune_date != current_date:
+                        ds.prune_old_data(30)
+                        self.last_prune_date = current_date
                     
                     # 记录并获取状态
                     ds.record_traffic(delta, current_used, remaining)

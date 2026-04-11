@@ -2,9 +2,10 @@ import threading
 import datetime
 
 class UIBridge:
-    def __init__(self, monitor, config_manager):
+    def __init__(self, monitor, config_manager, data_service):
         self.monitor = monitor
         self.config_manager = config_manager
+        self.data_service = data_service
         # 实时数据缓存
         self.latest_data = {
             "delta_s": "0 B/min",
@@ -14,6 +15,12 @@ class UIBridge:
             "last_update": "从未更新"
         }
         self._on_data_callbacks = []
+
+    def get_recent_history(self, hours=24):
+        return self.data_service.get_recent_history(hours)
+
+    def get_stats_summary(self, days=7):
+        return self.data_service.get_stats_summary(days)
 
     def register_callback(self, callback):
         """注册 UI 更新回调"""
