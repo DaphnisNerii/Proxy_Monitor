@@ -4,3 +4,13 @@ traffic_state.json
 config.json
 .planning/phases/*/*.log
 .planning/phases/*/error_report.log
+
+# GSD & Agent
+.agent/
+.planning/
+
+# Testing
+tests/
+.pytest_cache/
+pytest.ini
+requirements-test.txt
