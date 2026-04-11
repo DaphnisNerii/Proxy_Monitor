@@ -27,7 +27,8 @@ class UIStyles:
         style.configure("TLabelframe.Label", background=UIStyles.CARD_DARK, foreground=UIStyles.ACCENT, font=("Segoe UI", 10, "bold"))
 
 class SettingsWindow:
-    def __init__(self, config_manager, on_save_callback=None):
+    def __init__(self, parent_root, config_manager, on_save_callback=None):
+        self.parent_root = parent_root
         self.config_manager = config_manager
         self.on_save_callback = on_save_callback
         self.root = None
@@ -56,7 +57,12 @@ class SettingsWindow:
         return ImageTk.PhotoImage(img.resize((20, 20), Image.Resampling.LANCZOS))
 
     def show(self):
-        self.root = tk.Tk()
+        if self.root is not None and self.root.winfo_exists():
+            self.root.lift()
+            self.root.focus_force()
+            return
+
+        self.root = tk.Toplevel(self.parent_root)
         self.root.title("Proxy Monitor - 设置")
         self.root.configure(bg=UIStyles.BG_DARK)
         
@@ -109,8 +115,6 @@ class SettingsWindow:
         btns.pack(anchor="center")
         ttk.Button(btns, text=" 确定 ", style="Primary.TButton", command=self._save).pack(side=tk.LEFT, padx=10)
         ttk.Button(btns, text=" 取消 ", style="Primary.TButton", command=self.root.destroy).pack(side=tk.LEFT, padx=10)
-
-        self.root.mainloop()
 
     def _add_field(self, parent, label, key, icon_key, help_text=""):
         f = ttk.Frame(parent, style="Card.TFrame")
