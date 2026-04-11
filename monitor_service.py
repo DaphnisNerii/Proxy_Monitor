@@ -77,34 +77,43 @@ class TrafficMonitor:
                 info = self.get_traffic_info()
                 if info:
                     upload, download, total, expire = info
-                    current_used = upload + download
-                    remaining = max(0, total - current_used)
-                    
-                    state = {"date": "", "start_of_day_used": 0, "last_total_used": 0, "daily_warned": False}
-                    if os.path.exists(self.state_file):
-                        try:
-                            with open(self.state_file, "r") as f: state.update(json.load(f))
-                        except: pass
+                    from data_service import DataService
+                    ds = DataService()
                     
                     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                    if state["date"] != current_date:
-                        state.update({"date": current_date, "start_of_day_used": current_used, "daily_warned": False})
+                    # 从数据库获取今日起始电量或状态
+                    # 注意：Monitor逻辑中 today_used 需要 start_of_day_used
+                    # 改为直接存储 current_used 到历史，计算由 DataService 或 数据库聚合完成更佳
+                    # 但为了最小化逻辑变动，我们在内存维护或从 DB 获取今日最旧一条
                     
-                    today_used = max(0, current_used - state["start_of_day_used"])
+                    # 实现 30 天清理
+                    ds.prune_old_data(30)
                     
-                    if today_used > self.config.get("daily_limit_gb") * 1024**3 and not state["daily_warned"]:
-                        self.send_serverchan(f"⚠️ 流量超限: {self.format_bytes(today_used)}", f"已达每日额度。剩余: {self.format_bytes(remaining)}")
-                        state["daily_warned"] = True
+                    # 记录并获取状态
+                    ds.record_traffic(delta, current_used, remaining)
                     
-                    delta = max(0, current_used - state["last_total_used"]) if state["last_total_used"] > 0 else 0
+                    daily_warned = ds.is_daily_warned(current_date)
+                    
+                    # 计算今日使用量 (简化逻辑：如果跨天，则更新起始值)
+                    # 我们之前在 JSON 存了 start_of_day_used，现在可以从 DB 查今日第一条
+                    # 或者简单点，我们继续在 DataService 记录，这里只负责触发警告
+                    
+                    # 获取今日已用量用于告警
+                    today_used_from_db = current_used - (self.start_of_day_used if hasattr(self, 'start_of_day_used') else current_used)
+                    if not hasattr(self, 'current_day') or self.current_day != current_date:
+                        self.current_day = current_date
+                        self.start_of_day_used = current_used
+                        today_used_from_db = 0
+
+                    if today_used_from_db > self.config.get("daily_limit_gb") * 1024**3 and not daily_warned:
+                        self.send_serverchan(f"⚠️ 流量超限: {self.format_bytes(today_used_from_db)}", f"已达每日额度。剩余: {self.format_bytes(remaining)}")
+                        ds.set_daily_warned(current_date, True)
+                    
                     if delta > self.config.get("rate_limit_mb") * 1024**2:
                         self.send_serverchan(f"🚨 速率过快: {self.format_bytes(delta)}/min")
                     
-                    state["last_total_used"] = current_used
-                    with open(self.state_file, "w") as f: json.dump(state, f, indent=4)
-                    
                     if icon_callback:
-                        icon_callback(delta, today_used, remaining, expire)
+                        icon_callback(delta, today_used_from_db, remaining, expire)
             except Exception:
                 print(traceback.format_exc())
                 

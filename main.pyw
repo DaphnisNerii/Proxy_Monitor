@@ -35,6 +35,10 @@ def main():
 
     # 4. 初始化核心服务
     config_mgr = ConfigManager(CONFIG_FILE)
+    from data_service import DataService
+    ds = DataService()
+    ds.migrate_from_json(STATE_FILE) # 尝试从旧版 JSON 迁移
+    
     monitor = TrafficMonitor(config_mgr, STATE_FILE)
     monitor.refresh_event = threading.Event()
     
