@@ -7,7 +7,7 @@ config.json
 
 # GSD & Agent
 .agent/
-.planning/
+# .planning/  <- Allow versioning for GSD docs
 
 # Testing
 tests/
