@@ -13,7 +13,6 @@
   - **Exponential Backoff**: 指数退避重试策略，应对网络波动更稳健。
 - **🚨 智能预警**：支持每日限额与速率突发预警，通过 Server酱 推送。
 - **🛠️ 启动自检**：`Pre-flight` 自检逻辑，在环境缺失时提供清晰的修复指引。
-- **🧪 自动化测试**：内置 `pytest` 测试套件，核心逻辑覆盖率高，确保生产环境稳定。
 
 ## 🛠️ 安装与运行
 
@@ -32,21 +31,11 @@ cd Proxy_Monitor
 ```bash
 pip install -r requirements.txt
 ```
-若需运行测试，请输入：
-```bash
-pip install -r requirements-test.txt
-```
 
 ### 4. 启动程序
 推荐通过 `pythonw` 启动以实现纯托盘无窗口运行：
 ```bash
 pythonw main.pyw
-```
-
-## 🧪 自动化测试
-本项目使用 `pytest` 进行逻辑验证。运行所有测试：
-```bash
-pytest
 ```
 
 ## 📂 项目结构
@@ -59,7 +48,7 @@ Proxy_Monitor/
 ├── tray_app.py           # 托盘交互实现
 ├── ui_components.py      # Tkinter UI 组件 (设置窗口等)
 ├── system_utils.py       # 系统工具 (锁、自检、Windows API)
-├── tests/                # 自动化测试用例
+├── assets/               # 资源文件 (预览图)
 ├── .gitignore            # Git 忽略规则
 └── README.md             # 项目说明文档
 ```
