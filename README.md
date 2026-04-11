@@ -1,24 +1,19 @@
 # 🚀 Proxy Traffic Monitor | 代理流量监控小助手
 
-一款专为 Windows 用户设计的轻量级代理订阅流量监控工具。它驻留在系统托盘，实时显示流量消耗，并在流量超限或异常波动时通过 Server酱 向您发送提醒。
+一款专为 Windows 用户设计的极速、健壮、模块化的代理订阅流量监控工具。它驻留在系统托盘，实时显示流量消耗，并在异常情况下提供可靠的反馈。
 
 ---
 
 ## ✨ 功能特性
 
-- **📂 实时监控**：自动获取订阅链接中的 `Subscription-Userinfo` 标头，实时统计上传、下载及剩余流量。
-- **🎨 托盘交互**：简洁的系统托盘图标，悬停即可查看当前速率、今日已用和剩余流量。
-- **⚙️ 图形化配置**：内置 Tkinter 编写的设置窗口，无需修改代码即可定义所有参数。
-- **🚨 智能预警**：
-  - **每日限额**：达到设定的每日流量阈值时触发警报。
-  - **速率异常**：检测到单位时间内流量突发消耗（如后台大文件下载等）时触发警报。
-- **🔔 消息推送**：支持通过 **Server酱 (Turbo)** 将预警信息推送到您的微信/手机。
-- **🔄 开机自启**：一键开启 Windows 注册表自启动，后台无感运行。
-
-## 📸 预览展示
-
-![托盘预览](assets/tray_preview.png)
-![设置界面](assets/settings_preview.png)
+- **📂 核心模块化**：已由单文件脚本重构为解耦的模块化架构，逻辑与 UI 完全分离。
+- **🎨 托盘交互**：简洁的系统托盘图标，悬停查看当前速率及今日用量。
+- **⚖️ 极速健壮**：
+  - **NamedMutex**: 采用 Windows 原生互斥锁防止多开，崩溃后自动重启无压力。
+  - **Exponential Backoff**: 指数退避重试策略，应对网络波动更稳健。
+- **🚨 智能预警**：支持每日限额与速率突发预警，通过 Server酱 推送。
+- **🛠️ 启动自检**：`Pre-flight` 自检逻辑，在环境缺失时提供清晰的修复指引。
+- **🧪 自动化测试**：内置 `pytest` 测试套件，核心逻辑覆盖率高，确保生产环境稳定。
 
 ## 🛠️ 安装与运行
 
@@ -27,61 +22,50 @@
 - Python 3.7+
 
 ### 2. 获取程序
-
-您可以选择以下两种方式之一：
-
-#### A. 开发者方式 (通过 Git 克隆)
 ```bash
 git clone https://github.com/DaphnisNerii/Proxy_Monitor.git
 cd Proxy_Monitor
 ```
 
-#### B. 普通用户方式 (下载压缩包)
-前往 [Releases](https://github.com/DaphnisNerii/Proxy_Monitor/releases) 页面，下载最新的 `Source code (zip)` 文件并解压到本地文件夹。
-
 ### 3. 安装依赖
-程序会在首次启动时自动尝试安装必要的依赖。若自动安装失败，请在项目根目录手动执行：
+程序会在首次启动时尝试自动修复缺失依赖。手动安装：
 ```bash
-pip install pystray pillow
+pip install -r requirements.txt
+```
+若需运行测试，请输入：
+```bash
+pip install -r requirements-test.txt
 ```
 
 ### 4. 启动程序
-由于本程序是后台托盘工具，推荐使用 `pythonw` 运行以隐藏控制台窗口：
-- 直接双击 `proxy_monitor.pyw`
-- 或在命令行执行：
-  ```bash
-  pythonw proxy_monitor.pyw
-  ```
+推荐通过 `pythonw` 启动以实现纯托盘无窗口运行：
+```bash
+pythonw main.pyw
+```
 
-## ⚙️ 配置说明
-
-首次运行时，程序会自动加载默认配置并生成 `config.json`。您可以右键托盘图标点击 **设置** 进行修改：
-
-- **订阅链接 (sub_url)**: 您的代理服务提供商给出的订阅地址。
-- **Server酱 Key**: 从 [Server酱官网](https://sct.ftqq.com/) 获取的 SendKey。
-- **流量阈值**: 
-    - 每日限额 (GB)：当天累计消耗超过此值时预警。
-    - 速率阈值 (MB/m)：每分钟消耗超过此值时预警。
-- **检查间隔**: 建议设为 60 秒。
-
-> [!IMPORTANT]
-> **隐私提醒**: 请**务必不要**将您的 `config.json` 上传到任何公开仓库。本项目已预设了 `.gitignore` 来保护您的个人隐私。
+## 🧪 自动化测试
+本项目使用 `pytest` 进行逻辑验证。运行所有测试：
+```bash
+pytest
+```
 
 ## 📂 项目结构
 
 ```text
 Proxy_Monitor/
-├── proxy_monitor.pyw     # 主程序 (无窗口运行)
-├── config.json           # 个人配置文件 (已被忽略，不提交)
-├── config.json.example   # 配置模板
+├── main.pyw              # 程序入口 (启动自检与集成)
+├── monitor_service.py    # 核心监控逻辑 (网络抓取与解析)
+├── config_manager.py     # 配置管理 (注册表与 JSON)
+├── tray_app.py           # 托盘交互实现
+├── ui_components.py      # Tkinter UI 组件 (设置窗口等)
+├── system_utils.py       # 系统工具 (锁、自检、Windows API)
+├── tests/                # 自动化测试用例
 ├── .gitignore            # Git 忽略规则
 └── README.md             # 项目说明文档
 ```
 
 ## 🤝 贡献与反馈
-
-如果您在使用过程中发现 Bug 或有新的功能建议，欢迎提交 Issue 或 Pull Request！
+欢迎提交 Issue 或 Pull Request！
 
 ---
-
-**如果这个小工具对您有帮助，点个 Star ⭐️ 就是对作者最大的支持！**
+**如果这个工具对你有帮助，欢迎点个 Star ⭐️！**
