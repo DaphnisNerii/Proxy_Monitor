@@ -48,6 +48,18 @@ class PreFlightCheck:
         except ImportError:
             return False
 
+    def get_missing(self):
+        missing = []
+        try:
+            import pystray
+        except ImportError:
+            missing.append("pystray")
+        try:
+            from PIL import Image
+        except ImportError:
+            missing.append("Pillow")
+        return missing if missing else ["unknown"]
+
     def auto_repair(self):
         print(f"[{datetime.datetime.now()}] 正在尝试自动修复依赖环境...")
         try:

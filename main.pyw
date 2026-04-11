@@ -29,8 +29,22 @@ def main():
     checker = PreFlightCheck(os.path.join(BASE_DIR, "requirements.txt"))
     if not checker.check_dependencies():
         if not checker.auto_repair():
-            # 这里原本应该用弹窗，但由于重构期简化，暂回退到日志
-            print("关键依赖缺失且修复失败。")
+            missing = checker.get_missing()
+            msg = (
+                "以下关键依赖缺失且自动修复失败：\n\n"
+                + "\n".join(f"  • {m}" for m in missing) + "\n\n"
+                "请尝试手动执行:\n"
+                f"  pip install -r {os.path.join(BASE_DIR, 'requirements.txt')}\n\n"
+                "如仍无法解决，请访问项目 GitHub Issues 提交反馈。"
+            )
+            try:
+                from tkinter import messagebox as _mb
+                _r = tk.Tk(); _r.withdraw()
+                _mb.showerror("Proxy Monitor - 启动失败", msg)
+                _r.destroy()
+            except Exception:
+                pass
+            print(msg)
             sys.exit(1)
 
     # 4. 初始化核心服务
@@ -54,6 +68,8 @@ def main():
 
     def on_settings_save():
         monitor.refresh_event.set()
+        if tray[0]:
+            tray[0].notify("配置已保存", "正在刷新监控数据...")
 
     ui_instance = [None]
 
@@ -94,6 +110,19 @@ if __name__ == "__main__":
         main()
     except Exception:
         import traceback
-        print(traceback.format_exc())
+        err_detail = traceback.format_exc()
+        print(err_detail)
+        try:
+            from tkinter import messagebox as _mb
+            _r = tk.Tk(); _r.withdraw()
+            _mb.showerror(
+                "Proxy Monitor - 未处理的异常",
+                f"程序遇到了意外错误，即将退出。\n\n"
+                f"错误摘要:\n{err_detail[:500]}\n\n"
+                f"完整日志已写入:\n{LOG_FILE}"
+            )
+            _r.destroy()
+        except Exception:
+            pass
     finally:
         mutex.release()

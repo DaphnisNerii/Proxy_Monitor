@@ -38,6 +38,13 @@ class ProxyTrayIcon:
         self.icon = pystray.Icon("proxy_monitor", self.create_image(), "Proxy Monitor 运行中", menu)
         self.icon.run()
 
+    def notify(self, title, message=""):
+        if self.icon:
+            try:
+                self.icon.notify(message, title)
+            except Exception:
+                pass
+
     def stop(self):
         if self.icon:
             self.icon.stop()
