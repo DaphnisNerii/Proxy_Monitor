@@ -6,8 +6,7 @@ config.json
 
 # GSD & Agent
 .agent/
-.planning/phases/*/*.log
-.planning/phases/*/error_report.log
+.planning/
 scratch/
 
 # Testing
