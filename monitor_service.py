@@ -74,17 +74,19 @@ class TrafficMonitor:
         print("代理流量监控已启动！开始后台轮询...")
         while self.keep_running:
             try:
+                current_date = datetime.datetime.now().strftime("%Y-%m-%d")
                 info = self.get_traffic_info()
                 if info:
                     upload, download, total, expire = info
                     from data_service import DataService
                     ds = DataService()
                     
-                    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                    # 从数据库获取今日起始电量或状态
-                    # 注意：Monitor逻辑中 today_used 需要 start_of_day_used
-                    # 改为直接存储 current_used 到历史，计算由 DataService 或 数据库聚合完成更佳
-                    # 但为了最小化逻辑变动，我们在内存维护或从 DB 获取今日最旧一条
+                    current_used = upload + download
+                    remaining = total - current_used
+                    delta = 0
+                    if hasattr(self, 'last_used'):
+                        delta = current_used - self.last_used
+                    self.last_used = current_used
                     
                     # 实现 30 天清理 (仅在跨天或启动时运行一次)
                     if not hasattr(self, 'last_prune_date') or self.last_prune_date != current_date:
@@ -96,16 +98,12 @@ class TrafficMonitor:
                     
                     daily_warned = ds.is_daily_warned(current_date)
                     
-                    # 计算今日使用量 (简化逻辑：如果跨天，则更新起始值)
-                    # 我们之前在 JSON 存了 start_of_day_used，现在可以从 DB 查今日第一条
-                    # 或者简单点，我们继续在 DataService 记录，这里只负责触发警告
-                    
                     # 获取今日已用量用于告警
-                    today_used_from_db = current_used - (self.start_of_day_used if hasattr(self, 'start_of_day_used') else current_used)
                     if not hasattr(self, 'current_day') or self.current_day != current_date:
                         self.current_day = current_date
                         self.start_of_day_used = current_used
-                        today_used_from_db = 0
+                    
+                    today_used_from_db = current_used - self.start_of_day_used
 
                     if today_used_from_db > self.config.get("daily_limit_gb") * 1024**3 and not daily_warned:
                         self.send_serverchan(f"⚠️ 流量超限: {self.format_bytes(today_used_from_db)}", f"已达每日额度。剩余: {self.format_bytes(remaining)}")

@@ -19,8 +19,8 @@ CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 # 1. 立即设置日志重定向
 setup_logging(LOG_FILE)
 
-# 2. 单实例锁定
-mutex = NamedMutex("ProxyTrafficMonitor_SingleInstance")
+# 2. 单实例检查 (命名互斥量)
+mutex = NamedMutex("ProxyMonitor_v1_1_Mutex")
 if not mutex.acquire():
     print(f"[{datetime.datetime.now()}] 程序已在运行中，退出新进程。")
     sys.exit(0)

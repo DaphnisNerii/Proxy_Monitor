@@ -1,16 +1,18 @@
-__pycache__/
+# Local Data & Logs
 *.log
+traffic.db*
 traffic_state.json
 config.json
-.planning/phases/*/*.log
-.planning/phases/*/error_report.log
 
 # GSD & Agent
 .agent/
-# .planning/  <- Allow versioning for GSD docs
+.planning/phases/*/*.log
+.planning/phases/*/error_report.log
+scratch/
 
 # Testing
 tests/
 .pytest_cache/
 pytest.ini
 requirements-test.txt
+signature.txt

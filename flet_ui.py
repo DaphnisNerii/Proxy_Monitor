@@ -9,7 +9,7 @@ class FletUI:
         self.content_area = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO)
         
         # 实时数据组件
-        self.status_delta = ft.Text("0 B/min", size=32, weight=ft.FontWeight.BOLD, color=ft.Colors.ACCENT)
+        self.status_delta = ft.Text("0 B/min", size=32, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
         self.status_today = ft.Text("0 B", size=18, color=ft.Colors.SECONDARY)
         self.status_remaining = ft.Text("0 B", size=18, color=ft.Colors.SECONDARY)
         self.status_expire = ft.Text("N/A", size=14, color=ft.Colors.OUTLINE)
@@ -17,16 +17,10 @@ class FletUI:
 
         # 历史趋势组件
         self.chart_series = ft.LineChartData(
-            color=ft.Colors.ACCENT,
+            color=ft.Colors.BLUE,
             stroke_width=3,
             curved=True,
-            below_line_bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ACCENT),
-            below_line_gradient=ft.LinearGradient(
-                begin=ft.alignment.top_center,
-                end=ft.alignment.bottom_center,
-                colors=[ft.Colors.ACCENT, ft.Colors.TRANSPARENT],
-            ),
-            points=[]
+            data_points=[]
         )
         self.chart = ft.LineChart(
             data_series=[self.chart_series],
@@ -51,7 +45,7 @@ class FletUI:
         
         # 拦截关闭事件，改为隐藏
         self.page.window.prevent_close = True
-        self.page.on_window_event = self._on_window_event
+        self.page.window.on_event = self._on_window_event
         
         # 初始化界面
         self._build_layout()
@@ -95,21 +89,22 @@ class FletUI:
         history = self.bridge.get_recent_history(24)
         if history:
             now = datetime.datetime.now()
-            points = []
-            for ts_str, delta in history:
-                ts = datetime.datetime.fromisoformat(ts_str)
-                # X 轴为相对于“当前时间 - 24小时”的秒数
-                x = (ts - (now - datetime.timedelta(hours=24))).total_seconds()
-                # Y 轴为 MB/min
-                y = delta / (1024 * 1024)
-                points.append(ft.LineChartDataPoint(x, y))
+            now_ts = now.timestamp()
+            # 2. 构造数据点
+            data_points = []
+            for item in history:
+                ts_str, delta_bytes = item
+                ts = datetime.datetime.fromisoformat(ts_str).timestamp()
+                x_val = 86400 - (now_ts - ts)
+                y_val = delta_bytes / (1024 * 1024) # MB/min
+                data_points.append(ft.LineChartDataPoint(x_val, y_val))
             
-            self.chart_series.points = points
+            self.chart_series.data_points = data_points
             
             # 3. 设置坐标轴与标签 (每4小时一个刻度)
             self.chart.min_x = 0
             self.chart.max_x = 86400
-            self.chart.max_y = max(p.y for p in points) * 1.2 or 1
+            self.chart.max_y = max(p.y for p in data_points) * 1.2 or 1
             
             labels = []
             for i in range(0, 25, 4): # 从 -24h 到 0h，每 4 小时
@@ -132,11 +127,11 @@ class FletUI:
                     ft.Container(
                         content=ft.Column([
                             ft.Text(date_str[5:], size=12, weight=ft.FontWeight.W_500), # 只显示 MM-DD
-                            ft.Text(f"{gb:.2f} GB", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.ACCENT),
+                            ft.Text(f"{gb:.2f} GB", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE),
                         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
                         padding=10,
                         border_radius=8,
-                        bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                        bgcolor=ft.Colors.SURFACE,
                         width=80,
                     )
                 )
@@ -212,9 +207,9 @@ class FletUI:
                     ]),
                 ]),
                 padding=20,
-                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                border=ft.border.all(1, ft.Colors.OUTLINE),
                 border_radius=10,
-                bgcolor=ft.Colors.SURFACE_VARIANT,
+                bgcolor=ft.Colors.SURFACE,
             ),
             ft.Container(height=20),
             ft.Text("24小时流量速率 (MB/min)", size=18, weight=ft.FontWeight.W_500),
@@ -276,8 +271,8 @@ class FletUI:
                 icon=ft.Icons.SAVE, 
                 on_click=self._on_save_settings,
                 style=ft.ButtonStyle(
-                    bgcolor=ft.Colors.ACCENT, 
-                    color=ft.Colors.ON_ACCENT
+                    bgcolor=ft.Colors.BLUE, 
+                    color=ft.Colors.WHITE
                 )
             )
         ]
