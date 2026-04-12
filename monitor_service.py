@@ -74,37 +74,46 @@ class TrafficMonitor:
         print("代理流量监控已启动！开始后台轮询...")
         while self.keep_running:
             try:
+                current_date = datetime.datetime.now().strftime("%Y-%m-%d")
                 info = self.get_traffic_info()
                 if info:
                     upload, download, total, expire = info
+                    from data_service import DataService
+                    ds = DataService()
+                    
                     current_used = upload + download
-                    remaining = max(0, total - current_used)
+                    remaining = total - current_used
+                    delta = 0
+                    if hasattr(self, 'last_used'):
+                        delta = current_used - self.last_used
+                    self.last_used = current_used
                     
-                    state = {"date": "", "start_of_day_used": 0, "last_total_used": 0, "daily_warned": False}
-                    if os.path.exists(self.state_file):
-                        try:
-                            with open(self.state_file, "r") as f: state.update(json.load(f))
-                        except: pass
+                    # 实现 30 天清理 (仅在跨天或启动时运行一次)
+                    if not hasattr(self, 'last_prune_date') or self.last_prune_date != current_date:
+                        ds.prune_old_data(30)
+                        self.last_prune_date = current_date
                     
-                    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                    if state["date"] != current_date:
-                        state.update({"date": current_date, "start_of_day_used": current_used, "daily_warned": False})
+                    # 记录并获取状态
+                    ds.record_traffic(delta, current_used, remaining)
                     
-                    today_used = max(0, current_used - state["start_of_day_used"])
+                    daily_warned = ds.is_daily_warned(current_date)
                     
-                    if today_used > self.config.get("daily_limit_gb") * 1024**3 and not state["daily_warned"]:
-                        self.send_serverchan(f"⚠️ 流量超限: {self.format_bytes(today_used)}", f"已达每日额度。剩余: {self.format_bytes(remaining)}")
-                        state["daily_warned"] = True
+                    # 获取今日已用量用于告警
+                    if not hasattr(self, 'current_day') or self.current_day != current_date:
+                        self.current_day = current_date
+                        self.start_of_day_used = current_used
                     
-                    delta = max(0, current_used - state["last_total_used"]) if state["last_total_used"] > 0 else 0
+                    today_used_from_db = current_used - self.start_of_day_used
+
+                    if today_used_from_db > self.config.get("daily_limit_gb") * 1024**3 and not daily_warned:
+                        self.send_serverchan(f"⚠️ 流量超限: {self.format_bytes(today_used_from_db)}", f"已达每日额度。剩余: {self.format_bytes(remaining)}")
+                        ds.set_daily_warned(current_date, True)
+                    
                     if delta > self.config.get("rate_limit_mb") * 1024**2:
                         self.send_serverchan(f"🚨 速率过快: {self.format_bytes(delta)}/min")
                     
-                    state["last_total_used"] = current_used
-                    with open(self.state_file, "w") as f: json.dump(state, f, indent=4)
-                    
                     if icon_callback:
-                        icon_callback(delta, today_used, remaining, expire)
+                        icon_callback(delta, today_used_from_db, remaining, expire)
             except Exception:
                 print(traceback.format_exc())
                 

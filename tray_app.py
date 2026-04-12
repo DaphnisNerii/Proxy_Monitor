@@ -4,8 +4,8 @@ import datetime
 from PIL import Image, ImageDraw
 
 class ProxyTrayIcon:
-    def __init__(self, monitor_service, on_settings_click=None, on_exit_click=None):
-        self.monitor = monitor_service
+    def __init__(self, bridge, on_settings_click=None, on_exit_click=None):
+        self.bridge = bridge
         self.on_settings_click = on_settings_click
         self.on_exit_click = on_exit_click
         self.icon = None
@@ -21,6 +21,9 @@ class ProxyTrayIcon:
 
     def update_status(self, delta_str, today_str, remaining_str, expire_str=None):
         if not self.icon: return
+        # 同时也通知 Bridge 更新数据给 Flet UI
+        self.bridge.update_data(delta_str, today_str, remaining_str, expire_str)
+        
         title = f"速率: {delta_str}\n今日已用: {today_str}\n总计剩余: {remaining_str}"
         if expire_str:
             title += f"\n到期时间: {expire_str}"
@@ -28,9 +31,9 @@ class ProxyTrayIcon:
 
     def run(self):
         menu = pystray.Menu(
-            pystray.MenuItem("📊 Proxy Monitor", lambda: None, enabled=False),
+            pystray.MenuItem("📊 Proxy Monitor", lambda: self.on_settings_click() if self.on_settings_click else None, default=True),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("🔄 立即刷新数据", lambda: self.monitor.refresh_event.set() if self.monitor.refresh_event else None),
+            pystray.MenuItem("🔄 立即刷新数据", lambda: self.bridge.request_refresh()),
             pystray.MenuItem("⚙️ 修改首选项...", self.on_settings_click),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("🚪 安全退出程序", self.on_exit_click)
