@@ -38,10 +38,10 @@ class FletUI:
         self.page = page
         self.page.title = "Proxy Monitor"
         self.page.theme_mode = ft.ThemeMode.DARK
-        self.page.window.width = 800
-        self.page.window.height = 600
-        self.page.window.min_width = 600
-        self.page.window.min_height = 500
+        self.page.window.width = 1000
+        self.page.window.height = 950
+        self.page.window.min_width = 800
+        self.page.window.min_height = 700
         
         # 拦截关闭事件，改为隐藏
         self.page.window.prevent_close = True
