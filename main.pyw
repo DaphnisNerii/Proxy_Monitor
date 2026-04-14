@@ -15,6 +15,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "monitor.log")
 STATE_FILE = os.path.join(BASE_DIR, "traffic_state.json")
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+DB_FILE = os.path.join(BASE_DIR, "traffic.db")
+
+# 0. 强制切换工作目录到程序所在路径
+os.chdir(BASE_DIR)
 
 # 1. 立即设置日志重定向
 setup_logging(LOG_FILE)
@@ -36,7 +40,7 @@ def main():
     # 4. 初始化核心服务
     config_mgr = ConfigManager(CONFIG_FILE)
     from data_service import DataService
-    ds = DataService()
+    ds = DataService(DB_FILE)
     ds.migrate_from_json(STATE_FILE) # 尝试从旧版 JSON 迁移
     
     monitor = TrafficMonitor(config_mgr, STATE_FILE)

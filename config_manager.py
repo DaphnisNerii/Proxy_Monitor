@@ -21,6 +21,9 @@ class ConfigManager:
     def __init__(self, config_path):
         self.config_path = config_path
         self.config = self.load_config()
+        # 启动时如果开启了自启，则同步一次路径，确保注册表始终指向当前位置
+        if self.config.get("auto_start"):
+            self.sync_auto_start()
 
     def load_config(self):
         config = self.DEFAULT_CONFIG.copy()
