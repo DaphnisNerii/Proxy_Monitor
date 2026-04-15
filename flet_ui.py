@@ -1,6 +1,7 @@
 import flet as ft
 import threading
 import datetime
+import gc
 
 class FletUI:
     def __init__(self, bridge):
@@ -66,6 +67,7 @@ class FletUI:
         if self.page:
             self.page.window.visible = True
             self.page.window.to_front()
+            self._update_charts() # 唤醒时强制刷新一次数据
             self.page.update()
 
     def _on_data_received(self, data):
@@ -76,12 +78,18 @@ class FletUI:
         self.status_expire.value = f"到期: {data['expire_s']}"
         self.status_last_update.value = f"最后同步: {data['last_update']}"
         
-        if self.page:
-            try:
-                self._update_charts()
-                self.page.update()
-            except:
-                pass
+        # 如果窗口不可见，跳过重绘图表，节省内存和性能
+        if not self.page or not self.page.window.visible:
+            return
+
+        try:
+            self._update_charts()
+            self.page.update()
+            # 强制触发一次垃圾回收，防止 Flet 旧组件堆积
+            if datetime.datetime.now().minute % 5 == 0:
+                gc.collect()
+        except:
+            pass
 
     def _update_charts(self):
         """刷新图表数据"""
@@ -90,9 +98,12 @@ class FletUI:
         if history:
             now = datetime.datetime.now()
             now_ts = now.timestamp()
-            # 2. 构造数据点
+            # 2. 构造数据点 (进行抽样以防点数过多导致内存泄漏, 保持约 180 个点，即平均每 8 分钟一个点)
             data_points = []
-            for item in history:
+            step = max(1, len(history) // 180)
+            sampled_history = history[::step]
+            
+            for item in sampled_history:
                 ts_str, delta_bytes = item
                 ts = datetime.datetime.fromisoformat(ts_str).timestamp()
                 x_val = 86400 - (now_ts - ts)

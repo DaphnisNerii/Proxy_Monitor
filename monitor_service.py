@@ -70,16 +70,18 @@ class TrafficMonitor:
                 backoff_sec *= 2
         return None
 
-    def run_loop(self, icon_callback=None):
+    def run_loop(self, icon_callback=None, data_service=None):
         print("代理流量监控已启动！开始后台轮询...")
+        ds = data_service
         while self.keep_running:
             try:
                 current_date = datetime.datetime.now().strftime("%Y-%m-%d")
                 info = self.get_traffic_info()
                 if info:
                     upload, download, total, expire = info
-                    from data_service import DataService
-                    ds = DataService()
+                    if ds is None:
+                        from data_service import DataService
+                        ds = DataService()
                     
                     current_used = upload + download
                     remaining = total - current_used

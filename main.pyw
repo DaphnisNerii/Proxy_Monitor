@@ -80,7 +80,7 @@ def main():
     threading.Thread(target=tray[0].run, daemon=True).start()
 
     # 8. 启动后台监控线程
-    threading.Thread(target=monitor.run_loop, args=(update_tray_status,), daemon=True).start()
+    threading.Thread(target=monitor.run_loop, args=(update_tray_status, ds), daemon=True).start()
 
     # 9. 启动 Flet 应用 (主线程)
     # 使用 hidden 启动，等待托盘唤起
